@@ -19,6 +19,10 @@ curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 - rust
     - 1.70.0と念の為stableもinstall
 
+### Vercel
+- ビジュアライザをホスティングするのに使用する
+- GitHubアカウントと紐づけてVercelのアカウントを作成しておく
+
 ## 開発手順
 ### 事前準備
 1. 本リポジトリをbare cloneする
@@ -50,7 +54,7 @@ yarn
 yarn add @vercel/edge
 ```
 ### 本番中の開発
-1. 配布されたローカルテスタのlib.rsと問題文を使っていったんLLMさんに聞いてみる
+1. 配布されたローカルテスタのlib.rsと問題文を使って、いったん好きなLLMさん(o1-mini等)に聞いてみる
 <details>
 
 <summary>プロンプト</summary>
@@ -65,7 +69,7 @@ Rust側: Reactから渡されたものに対して処理を行う:
 ことを行なっています。
 以下のコードはRust側の例で、インターフェースを変えずに(つまり、lib.rsの内容をほぼ変えずに)、別のコンテスト用のビジュアライザシステムの開発を行いたいです:
 
-[lib.rs]
+[lib.rs][1パターン目]
 use wasm_bindgen::prelude::*;
 mod util;
 
@@ -97,6 +101,52 @@ pub fn vis(_input: String, _output: String, turn: usize) -> Ret {
 pub fn get_max_turn(_input: String, _output: String) -> usize {
     let output = util::parse_output(&_output);
     output.q
+}
+
+[lib.rs][2パターン目 (parse_outputの返り値がResultでwrapされているケース)]
+use wasm_bindgen::prelude::*;
+mod util;
+
+#[wasm_bindgen]
+pub fn gen(seed: i32) -> String {
+    util::gen(seed as u64).to_string()
+}
+
+#[wasm_bindgen(getter_with_clone)]
+pub struct Ret {
+    pub score: i64,
+    pub err: String,
+    pub svg: String,
+}
+
+#[wasm_bindgen]
+pub fn vis(_input: String, _output: String, turn: usize) -> Ret {
+    let input = util::parse_input(&_input);
+    let output_result = util::parse_output(&input, &_output);
+    match output_result {
+        Ok(output) => {
+            let (score, err, svg) = util::vis(&input, &output, turn);
+            Ret {
+                score: score as i64,
+                err: err.to_string(),
+                svg: svg.to_string(),
+            }
+        }
+        Err(err) => Ret {
+            score: 0,
+            err: err.to_string(),
+            svg: String::new(),
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub fn get_max_turn(_input: String, _output: String) -> usize {
+    let input = util::parse_input(&_input);
+    match util::parse_output(&input, &_output) {
+        Ok(out) => out.out.len(),
+        Err(_) => 0,
+    }
 }
 
 [util.rs]
@@ -388,12 +438,21 @@ pub fn vis(input: &Input, output: &Output, turn: usize) -> (i64, String, String)
 
 
 上記の情報を参考にして、この次に与えるAtCoder Heuristic Contestの問題のビジュアライザのためのutil.rsを書いてください。
-ただし、元々のutil.rsの構造を大きく変えないで欲しいです:
-- Input, Output構造体を作る
+ただし、上記のutil.rsの構造を大きく変えないで欲しいです。
+以下に厳密に従ってください。
+- Input,Output構造体を作る
 - Input,Outputに実装したトレイトは必ず実装する(特にDisplayを忘れがち)
+- parse_input, parse_output関数はこれ以降で添付するlib.rsの内容からほとんど変えないでください
+- compute_scoreやcompute_score_detailsなどのスコア計算の関数は、これ以降で添付するlib.rsの内容から絶対に変更しないでください
 - 適切にコメントを入れる
 - 入力生成方法は簡易化せずに厳密に指定に従う必要があります
-- 同じlib.rsを使うので、util.rsのインターフェースを変えることは禁止
+- これ以降で添付したlib.rsに応じて、util.rsのインターフェースを適切に設定してください
+- svg::node::element::Textを使用する場合、インスタンスの初期化時に適切な文字列を入れてください
+    - 例えば、問題文に2つのエンティティが存在する場合、一方をText::new("x")、もう一方をText::new("o")などとしてください
+    - エンティティ名は問題文に登場するものから適切に命名してください
+    - わからない場合、Text::new("")でよいです
+- vis関数は、引数で渡されたinput, output, turnを用いてturnまでの結果をシミュレートした後の状態を描画するようにしてください
+
 - Rustのクレートは以下のバージョンのものを使用する:
 wasm-bindgen = "0.2.89"
 getrandom = {version="0.2", features=["js"]}
@@ -407,7 +466,8 @@ svg = "0.17.0"
 delaunator = "1.0.1"
 web-sys = {"version" = "0.3.44", features=['console']}
 
-ただし、以下のコードを踏襲してInput, Output, genなどを書いてください。
+ただし、以下のコードを踏襲してInput, Output, parse_input, parse_output, gen, compute_scoreなどを書いてください。
+それらを用いて、この問題にふさわしいvis関数を設計し、記載してください。
 
 [ツール類]
 公式から配布されるtools/src/lib.rsをコピペする
@@ -420,16 +480,17 @@ AtCoderのサイトからコピペ (右クリック -> ページのソースを�
 
 </details>
 
-2. wasmをbuild
+2. 結果をwasm/util.rsへ添付してwasmをbuild
 ```
 cd wasm
 wasm-pack build --target web --out-dir ../public/wasm
 ```
-3. (初回のみ) public/wasmを.gitignoreから外す
+3. (初回のみ) public/wasm/.gitignore を削除する
 4. ローカルで動確
 ```
 yarn dev
 ```
 5. vercelでホスティングする
-    1. add new projectで開発したリポジトリを選ぶ
-    2. build & development settingsでviteを選択し、build commandをtsc & vite buildとして実行
+    1. 変更をremoteへpushする
+    2. vercelのprojectページへ行き、add new projectを押下して上記で開発したリポジトリを選ぶ
+    3. build & development settingsで`vite`を選択し、build commandを`tsc & vite build`として実行
