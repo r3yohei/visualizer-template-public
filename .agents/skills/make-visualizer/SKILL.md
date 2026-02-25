@@ -1,6 +1,6 @@
 ---
 name: make-visualizer
-description: AHCスタイルのヒューリスティックコンテスト用WASMビジュアライザを実装する。problem_description.txt と tools/src/ が揃っているときに使用する。フロントエンド(React/TypeScript)は原則変更しない。
+description: AHCスタイルのヒューリスティックコンテスト用WASMビジュアライザを実装する。problem_description.txt と ../tools/src/ が揃っているときに使用する。フロントエンド(React/TypeScript)は原則変更しない。
 ---
 
 # make-visualizer
@@ -15,7 +15,7 @@ description: AHCスタイルのヒューリスティックコンテスト用WASM
 以下を確認し、問題があれば停止してユーザーに伝えてください:
 
 - `problem_description.txt` を読んで、プレースホルダーのまま（「コンテストの問題文をここに記載してください」のような内容）であれば停止して「problem_description.txt に問題文を記載してください」と伝える
-- `tools/src/` が存在しなければ停止して「公式から配布されるテスターコードを `tools/src/` に配置してください」と伝える
+- `../tools/src/` が存在しなければ停止して「公式から配布されるテスターコードを `../tools/src/` に配置してください」と伝える
 
 両方問題なければステップ2へ進む。
 
@@ -26,7 +26,7 @@ description: AHCスタイルのヒューリスティックコンテスト用WASM
 以下の2ファイルを読む:
 
 1. `problem_description.txt` — 入出力フォーマット・状態・スコア計算を確認
-2. `tools/src/lib.rs` — 構造体定義と公開関数のシグネチャを把握（**`tools/src/bin/` 以下は読まない**）
+2. `../tools/src/lib.rs` — 構造体定義と公開関数のシグネチャを把握（**`../tools/src/bin/` 以下は読まない**）
 
 読んだら、**実装せずに**以下の内容をユーザーに提示してください:
 
@@ -49,25 +49,25 @@ description: AHCスタイルのヒューリスティックコンテスト用WASM
 
 ### lib.rs の内容を impl_vis.rs の先頭に結合する
 
-**まず以下のシェルコマンドを実行して**、`tools/src/lib.rs` の内容を `wasm/src/impl_vis.rs` のプレースホルダー関数の**上**に結合する:
+**まず以下のシェルコマンドを実行して**、`../tools/src/lib.rs` の内容を `wasm/src/impl_vis.rs` のプレースホルダー関数の**上**に結合する:
 
 **macOS / Linux / Git Bash:**
 ```bash
-printf '%s' "$(cat tools/src/lib.rs wasm/src/impl_vis.rs)" > wasm/src/impl_vis.rs
+printf '%s' "$(cat ../tools/src/lib.rs wasm/src/impl_vis.rs)" > wasm/src/impl_vis.rs
 ```
 
 **Windows (PowerShell):**
 ```powershell
-$lib = Get-Content tools/src/lib.rs -Raw
+$lib = Get-Content ../tools/src/lib.rs -Raw
 $impl = Get-Content wasm/src/impl_vis.rs -Raw
 Set-Content wasm/src/impl_vis.rs "$lib$impl"
 ```
 
 これにより `impl_vis.rs` は以下の構造になる:
-1. `tools/src/lib.rs` の全内容（構造体・ロジック・ユーティリティ）
+1. `../tools/src/lib.rs` の全内容（構造体・ロジック・ユーティリティ）
 2. 既存のプレースホルダー関数（`generate` / `calc_max_turn` / `visualize`）
 
-**`tools/src/bin/` 以下は読まない。lib.rs のみ結合すること。**
+**`../tools/src/bin/` 以下は読まない。lib.rs のみ結合すること。**
 
 新しく書くのは主にプレースホルダーを埋める SVG 描画部分（`draw_svg` など）。
 
@@ -85,7 +85,7 @@ Set-Content wasm/src/impl_vis.rs "$lib$impl"
   _ => (0, rng.gen_range(1..=100) as f64, rng.gen_range(1..=20) as f64 * 0.01),
   ```
 
-**`tools/src/lib.rs` にはビジュアライザに不要なコードが含まれることがある。**
+**`../tools/src/lib.rs` にはビジュアライザに不要なコードが含まれることがある。**
 スコア計算・状態遷移・パース関数はビジュアライザでも必要だが、外部プロセスを起動・制御するためのコード（`exec` 関数、`read_line` 関数、`use std::process::ChildStdout` などの import）はビジュアライザには不要なので、遠慮なく削除すること。
 
 ### impl_vis.rs が公開する3つの関数
@@ -103,7 +103,7 @@ pub fn visualize(input: &str, output: &str, turn: usize) -> Result<(i64, String,
 
 #### `generate` における `problem_id` の扱い
 
-`tools/src/lib.rs` の `gen` 関数が問題カテゴリ（A/B/C など）を引数に取る場合でも、**そのカテゴリが存在しない問題もある**。
+`../tools/src/lib.rs` の `gen` 関数が問題カテゴリ（A/B/C など）を引数に取る場合でも、**そのカテゴリが存在しない問題もある**。
 
 - `gen` が問題カテゴリを引数に取らない（引数が seed だけ）場合: `problem_id` を無視してそのまま呼ぶ
 - `gen` が問題カテゴリを引数に取る場合: `problem_id`（"A", "B", "C" など）を `char` に変換して渡す。ただし、`problem_id` が空文字列・未知の値のときはデフォルト値（最初の問題カテゴリ）にフォールバックする
