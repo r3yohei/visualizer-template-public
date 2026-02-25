@@ -44,14 +44,19 @@ cd ..
 rm -rf visualizer-template-public.git/
 git clone https://github.com/r3yohei/visualizer-ahcXXX.git
 ```
-5. middleware.jsの `user`と`password` をチームで決めたものに変更する
+5. リポジトリに紐づくメールアドレスを設定する
+    - global設定で本垢以外等のメールが設定されている場合に必要
+```
+git config user.email r3yohei@gmail.com
+```
+6. middleware.jsの `user`と`password` をチームで決めたものに変更する
     - basic認証用です
-6. nodeモジュールのインストール
+7. nodeモジュールのインストール
 ```
 # project rootにて
 yarn
 ```
-7. vercelでBASIC認証をつけられるようにする
+8. vercelでBASIC認証をつけられるようにする
 ```
 yarn add @vercel/edge
 ```
